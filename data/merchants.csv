@@ -1,0 +1,4 @@
+merchant_id,name,declared_category,declared_mcc,category_group,declared_ticket_min,declared_ticket_max,declared_monthly_min,declared_monthly_max,declared_busy_start,declared_busy_end,festival_eligible,declared_catchment
+M1,Bakery A,bakery,5462,food,30,600,40000,80000,7,20,False,BLR
+M2,Sweet Shop,sweets,5441,food,100,2000,50000,100000,9,21,True,BLR
+M3,Bakery C,bakery,5462,food,30,600,40000,80000,7,20,False,BLR

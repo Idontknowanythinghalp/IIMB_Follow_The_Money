@@ -1,0 +1,4 @@
+merchant_id,scenario,is_front
+M1,normal bakery,False
+M2,genuine festival spike,False
+M3,betting bakery (fixture-linked),True
