@@ -1,4 +1,75 @@
-merchant_id,name,declared_category,declared_mcc,category_group,declared_ticket_min,declared_ticket_max,declared_monthly_min,declared_monthly_max,declared_busy_start,declared_busy_end,festival_eligible,declared_catchment
-M1,Bakery A,bakery,5462,food,30,600,40000,80000,7,20,False,BLR
-M2,Sweet Shop,sweets,5441,food,100,2000,50000,100000,9,21,True,BLR
-M3,Bakery C,bakery,5462,food,30,600,40000,80000,7,20,False,BLR
+merchant_id,name,declared_category,declared_mcc,category_group,declared_ticket_min,declared_ticket_max,declared_monthly_min,declared_monthly_max,declared_busy_start,declared_busy_end,festival_eligible,declared_catchment,settlement_account_id
+M1,Bakery A,bakery,5462,food,30,600,40000,80000,7,20,False,BLR,ACC-M1
+M2,Sweet Shop,sweets,5441,food,100,2000,50000,100000,9,21,True,BLR,ACC-M2
+M3,Bakery C,bakery,5462,food,30,600,40000,80000,7,20,False,BLR,ACC-M3
+M4a,Bakery D,bakery,5462,food,30,600,30000,70000,7,23,False,BLR,ACC-M4a
+M4b,Recharge Hub,recharge,4814,telecom,10,1000,30000,70000,8,22,False,BLR,ACC-M4b
+M5a,Campus Canteen,canteen,5812,food,20,400,40000,90000,9,17,False,BLR,ACC-M5a
+M5b,Campus Stationery,stationery,5943,retail,10,500,20000,60000,9,17,False,BLR,ACC-M5b
+M7,Match-night Pizza,restaurant,5812,food,100,1500,100000,200000,17,23,False,BLR,ACC-M7
+M8,Sweet Shop B,sweets,5441,food,100,2000,50000,100000,9,21,True,BLR,ACC-M8
+M9,Sweet Shop C,sweets,5441,food,100,2000,50000,100000,9,21,True,BLR,ACC-M9
+M10a,Bakery E,bakery,5462,food,30,600,30000,70000,7,23,False,BLR,ACC-OWNER-1
+M10b,Recharge Point,recharge,4814,telecom,10,1000,30000,70000,8,22,False,BLR,ACC-OWNER-1
+M6,Cafe Nine,cafe,5812,food,20,1500,40000,120000,9,23,False,BLR,ACC-M6
+M11,Bakery L,bakery,5462,food,30,20000,40000,1000000,7,23,False,BLR,ACC-M11
+BG01,Background bakery 1,bakery,5462,food,30,600,26377,80000,7,20,False,BLR,ACC-BG01
+BG02,Background bakery 2,bakery,5462,food,30,600,33976,80000,7,20,False,BLR,ACC-BG02
+BG03,Background bakery 3,bakery,5462,food,30,600,34810,80000,7,20,False,BLR,ACC-BG03
+BG04,Background bakery 4,bakery,5462,food,30,600,26789,80000,7,20,False,BLR,ACC-BG04
+BG05,Background bakery 5,bakery,5462,food,30,600,41906,87306,7,20,False,BLR,ACC-BG05
+BG06,Background bakery 6,bakery,5462,food,30,600,30605,80000,7,20,False,BLR,ACC-BG06
+BG07,Background bakery 7,bakery,5462,food,30,600,28896,80000,7,20,False,BLR,ACC-BG07
+BG08,Background bakery 8,bakery,5462,food,30,600,25971,80000,7,20,False,BLR,ACC-BG08
+BG09,Background bakery 9,bakery,5462,food,30,600,37010,80000,7,20,False,BLR,ACC-BG09
+BG10,Background bakery 10,bakery,5462,food,30,600,42509,88560,7,20,False,BLR,ACC-BG10
+BG11,Background bakery 11,bakery,5462,food,30,600,25562,80000,7,20,False,BLR,ACC-BG11
+BG12,Background bakery 12,bakery,5462,food,30,600,33143,80000,7,20,False,BLR,ACC-BG12
+BG13,Background sweets 13,sweets,5441,food,100,2000,50606,105429,9,21,False,BLR,ACC-BG13
+BG14,Background sweets 14,sweets,5441,food,100,2000,35654,100000,9,21,False,BLR,ACC-BG14
+BG15,Background sweets 15,sweets,5441,food,100,2000,46617,100000,9,21,False,BLR,ACC-BG15
+BG16,Background sweets 16,sweets,5441,food,100,2000,37057,100000,9,21,False,BLR,ACC-BG16
+BG17,Background sweets 17,sweets,5441,food,100,2000,35102,100000,9,21,False,BLR,ACC-BG17
+BG18,Background sweets 18,sweets,5441,food,100,2000,39078,100000,9,21,False,BLR,ACC-BG18
+BG19,Background sweets 19,sweets,5441,food,100,2000,26874,100000,9,21,False,BLR,ACC-BG19
+BG20,Background sweets 20,sweets,5441,food,100,2000,37747,100000,9,21,False,BLR,ACC-BG20
+BG21,Background sweets 21,sweets,5441,food,100,2000,40986,100000,9,21,False,BLR,ACC-BG21
+BG22,Background sweets 22,sweets,5441,food,100,2000,38036,100000,9,21,False,BLR,ACC-BG22
+BG23,Background sweets 23,sweets,5441,food,100,2000,38475,100000,9,21,False,BLR,ACC-BG23
+BG24,Background sweets 24,sweets,5441,food,100,2000,57015,118782,9,21,False,BLR,ACC-BG24
+BG25,Background eatery 25,eatery,5812,food,20,1500,63231,200000,9,23,False,BLR,ACC-BG25
+BG26,Background eatery 26,eatery,5812,food,20,1500,54242,200000,9,23,False,BLR,ACC-BG26
+BG27,Background eatery 27,eatery,5812,food,20,1500,76317,200000,9,23,False,BLR,ACC-BG27
+BG28,Background eatery 28,eatery,5812,food,20,1500,52484,200000,9,23,False,BLR,ACC-BG28
+BG29,Background eatery 29,eatery,5812,food,20,1500,61368,200000,9,23,False,BLR,ACC-BG29
+BG30,Background eatery 30,eatery,5812,food,20,1500,86410,200000,9,23,False,BLR,ACC-BG30
+BG31,Background eatery 31,eatery,5812,food,20,1500,69415,200000,9,23,False,BLR,ACC-BG31
+BG32,Background eatery 32,eatery,5812,food,20,1500,40388,200000,9,23,False,BLR,ACC-BG32
+BG33,Background eatery 33,eatery,5812,food,20,1500,52457,200000,9,23,False,BLR,ACC-BG33
+BG34,Background eatery 34,eatery,5812,food,20,1500,53583,200000,9,23,False,BLR,ACC-BG34
+BG35,Background eatery 35,eatery,5812,food,20,1500,87190,200000,9,23,False,BLR,ACC-BG35
+BG36,Background eatery 36,eatery,5812,food,20,1500,72898,200000,9,23,False,BLR,ACC-BG36
+BG37,Background stationery 37,stationery,5943,retail,10,500,16328,60000,9,18,False,BLR,ACC-BG37
+BG38,Background stationery 38,stationery,5943,retail,10,500,19103,60000,9,18,False,BLR,ACC-BG38
+BG39,Background stationery 39,stationery,5943,retail,10,500,21355,60000,9,18,False,BLR,ACC-BG39
+BG40,Background stationery 40,stationery,5943,retail,10,500,18957,60000,9,18,False,BLR,ACC-BG40
+BG41,Background stationery 41,stationery,5943,retail,10,500,27674,60000,9,18,False,BLR,ACC-BG41
+BG42,Background stationery 42,stationery,5943,retail,10,500,22522,60000,9,18,False,BLR,ACC-BG42
+BG43,Background stationery 43,stationery,5943,retail,10,500,19615,60000,9,18,False,BLR,ACC-BG43
+BG44,Background stationery 44,stationery,5943,retail,10,500,19645,60000,9,18,False,BLR,ACC-BG44
+BG45,Background stationery 45,stationery,5943,retail,10,500,16474,60000,9,18,False,BLR,ACC-BG45
+BG46,Background stationery 46,stationery,5943,retail,10,500,20266,60000,9,18,False,BLR,ACC-BG46
+BG47,Background stationery 47,stationery,5943,retail,10,500,25862,60000,9,18,False,BLR,ACC-BG47
+BG48,Background stationery 48,stationery,5943,retail,10,500,22268,60000,9,18,False,BLR,ACC-BG48
+BG49,Background recharge 49,recharge,4814,telecom,10,1000,50000,104166,8,22,False,BLR,ACC-BG49
+BG50,Background recharge 50,recharge,4814,telecom,10,1000,54236,112992,8,22,False,BLR,ACC-BG50
+BG51,Background recharge 51,recharge,4814,telecom,10,1000,38156,79491,8,22,False,BLR,ACC-BG51
+BG52,Background recharge 52,recharge,4814,telecom,10,1000,42381,88293,8,22,False,BLR,ACC-BG52
+BG53,Background recharge 53,recharge,4814,telecom,10,1000,47918,99831,8,22,False,BLR,ACC-BG53
+BG54,Background recharge 54,recharge,4814,telecom,10,1000,73852,153859,8,22,False,BLR,ACC-BG54
+BG55,Background recharge 55,recharge,4814,telecom,10,1000,70424,146716,8,22,False,BLR,ACC-BG55
+BG56,Background recharge 56,recharge,4814,telecom,10,1000,61812,128775,8,22,False,BLR,ACC-BG56
+BG57,Background recharge 57,recharge,4814,telecom,10,1000,63424,132134,8,22,False,BLR,ACC-BG57
+BG58,Background recharge 58,recharge,4814,telecom,10,1000,30277,70000,8,22,False,BLR,ACC-BG58
+BG59,Background recharge 59,recharge,4814,telecom,10,1000,61026,127137,8,22,False,BLR,ACC-BG59
+BG60,Background recharge 60,recharge,4814,telecom,10,1000,36103,75214,8,22,False,BLR,ACC-BG60

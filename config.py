@@ -52,6 +52,10 @@ PAYER_SCALES = {
     "off_hours_share":     (0.05, 0.40),  # share of txns outside the declared busy hours
     "ticket_vs_trend":     (1.5, 4.0),    # last-half average ticket / first-half average ticket
     "refund_share":        (0.05, 0.25),  # refunded money / payment money
+    # peer-relative versions (robust z-score against merchants with the same MCC)
+    "peer_top_payer_share": (2.0, 6.0),
+    "peer_round_share":     (2.0, 6.0),
+    "peer_txns_per_payer":  (2.0, 6.0),
 }
 TOP_PAYER_FRACTION = 0.10
 PAYER_TOP_K = 3  # s_payer = average of the K strongest sub-scores (avoids dilution)
@@ -86,3 +90,35 @@ NETWORK_OVERLAP_MIN = 0.60   # shared payers / smaller merchant's payers (in fix
 NETWORK_MIN_SHARED = 8       # at least this many bet-like payers shared (scaled to our small synthetic merchants)
 NETWORK_LIFT = 1.5           # in-window overlap must beat the same-hours baseline by this factor
 NETWORK_BONUS = 25
+
+# =====================================================================
+# Added in v3: MCC defaults + declaration clamp, session module, peers
+# =====================================================================
+
+# MCC defaults (placeholders; verify codes against an official list).
+# ticket = typical (low, high) payment, monthly_max = typical monthly volume ceiling.
+MCC_DEFAULTS = {
+    5462: {"ticket": (30, 600),   "monthly_max": 80000,  "hours": (7, 20)},   # bakeries
+    5441: {"ticket": (100, 2000), "monthly_max": 100000, "hours": (9, 21)},   # sweets
+    5812: {"ticket": (20, 1500),  "monthly_max": 200000, "hours": (9, 23)},   # eating places
+    5943: {"ticket": (10, 500),   "monthly_max": 60000,  "hours": (9, 18)},   # stationery
+    4814: {"ticket": (10, 1000),  "monthly_max": 70000,  "hours": (8, 22)},   # telecom / recharge
+}
+USE_DECLARATION_CLAMP = True
+DECLARATION_CLAMP = 2.0   # a declared ticket max / monthly max is trusted only up to 2x the MCC default
+
+# Session module (velocity): a session = SESSION_MIN_TXNS or more payments from one payer
+# within SESSION_WINDOW_HOURS.
+USE_SESSION_MODULE = True
+SESSION_WINDOW_HOURS = 2
+SESSION_MIN_TXNS = 3
+SESSION_SCALES = {
+    "payers_with_session": (0.05, 0.40),  # share of payers with at least one session
+    "escalating_sessions": (0.10, 0.60),  # share of sessions where the last amount >= 2x the first
+    "late_night_share":    (0.15, 0.60),  # share of payments between 21:00 and 02:00
+}
+
+# Peer comparison (robust z-scores against merchants with the same MCC).
+USE_PEERS = True
+PEER_MIN_SIZE = 8          # need at least this many peers, otherwise fixed baselines are used
+PEER_FLOORS = {"top_payer_share": 0.03, "round_share": 0.03, "txns_per_payer": 0.15}

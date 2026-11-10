@@ -2,3 +2,74 @@ merchant_id,scenario,is_front
 M1,normal bakery,False
 M2,genuine festival spike,False
 M3,betting bakery (fixture-linked),True
+M4a,"split operator (bakery side, shared bettors)",True
+M4b,"split operator (recharge side, shared bettors)",True
+M5a,campus canteen (shared students),False
+M5b,campus stationery (shared students),False
+M7,genuine match-night pizza shop,False
+M8,"festival-hiding front (round amounts, repeat payers)",True
+M9,"evasive festival front (varied amounts, one-time payers)",True
+M10a,"split operator (bakery side, linked by settlement account)",True
+M10b,"split operator (recharge side, linked by settlement account)",True
+M6,"casino-style sessions, no fixtures",True
+M11,front with an inflated declaration (huge ticket range),True
+BG01,background honest merchant,False
+BG02,background honest merchant,False
+BG03,background honest merchant,False
+BG04,background honest merchant,False
+BG05,background honest merchant,False
+BG06,background honest merchant,False
+BG07,background honest merchant,False
+BG08,background honest merchant,False
+BG09,background honest merchant,False
+BG10,background honest merchant,False
+BG11,background honest merchant,False
+BG12,background honest merchant,False
+BG13,background honest merchant,False
+BG14,background honest merchant,False
+BG15,background honest merchant,False
+BG16,background honest merchant,False
+BG17,background honest merchant,False
+BG18,background honest merchant,False
+BG19,background honest merchant,False
+BG20,background honest merchant,False
+BG21,background honest merchant,False
+BG22,background honest merchant,False
+BG23,background honest merchant,False
+BG24,background honest merchant,False
+BG25,background honest merchant,False
+BG26,background honest merchant,False
+BG27,background honest merchant,False
+BG28,background honest merchant,False
+BG29,background honest merchant,False
+BG30,background honest merchant,False
+BG31,background honest merchant,False
+BG32,background honest merchant,False
+BG33,background honest merchant,False
+BG34,background honest merchant,False
+BG35,background honest merchant,False
+BG36,background honest merchant,False
+BG37,background honest merchant,False
+BG38,background honest merchant,False
+BG39,background honest merchant,False
+BG40,background honest merchant,False
+BG41,background honest merchant,False
+BG42,background honest merchant,False
+BG43,background honest merchant,False
+BG44,background honest merchant,False
+BG45,background honest merchant,False
+BG46,background honest merchant,False
+BG47,background honest merchant,False
+BG48,background honest merchant,False
+BG49,background honest merchant,False
+BG50,background honest merchant,False
+BG51,background honest merchant,False
+BG52,background honest merchant,False
+BG53,background honest merchant,False
+BG54,background honest merchant,False
+BG55,background honest merchant,False
+BG56,background honest merchant,False
+BG57,background honest merchant,False
+BG58,background honest merchant,False
+BG59,background honest merchant,False
+BG60,background honest merchant,False

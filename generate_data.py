@@ -8,7 +8,9 @@ Merchants:  M1 normal bakery            M2 genuine Diwali sweet shop
             M5a/M5b campus shops        M7 genuine match-night pizza shop
             M8 festival-hiding front    M9 evasive festival front
             M10a/M10b split operator linked only by a shared settlement account
-(M6 roulette / session module and M3b smurfing variant come later.)
+            M6 casino-style sessions    M11 front with an inflated declaration
+            BG01.. background honest merchants (the peer groups)
+(M3b smurfing variant comes later.)
 
 The scorer must NEVER read ground_truth.csv. It exists only so we can check
 our results (and count false positives) afterwards.
@@ -127,6 +129,37 @@ def make_refunds(payments, rate):
     return picked
 
 
+# ------------------------------------------------- background (peer) merchants
+BACKGROUND_PER_MCC = 12
+BG_MCC_GROUP = {5462: "food", 5441: "food", 5812: "food", 5943: "retail", 4814: "telecom"}
+BG_NAMES = {5462: "bakery", 5441: "sweets", 5812: "eatery", 5943: "stationery", 4814: "recharge"}
+
+
+def make_background(idx, mcc):
+    """One honest merchant with its own natural quirks (regulars, round prices...)."""
+    d = config.MCC_DEFAULTS[mcc]
+    lo, hi = d["ticket"]
+    start_h, end_h = d["hours"]
+    # choose volume first (40-90% of the MCC's typical monthly ceiling), then the number of payments
+    top = min(hi, lo + int((hi - lo) * rng.uniform(0.15, 0.4)))
+    mean_amount = float(np.mean(varied_amounts(400, lo, top)))
+    target_monthly = d["monthly_max"] * rng.uniform(0.4, 0.9)
+    n = int(np.clip(target_monthly * (config.WEEKS * 7 / 30) / mean_amount, 150, 900))
+    pool_size = max(30, int(n * rng.uniform(0.35, 0.95)))   # some merchants have many regulars
+    pool = make_pool(f"BG{idx:02d}P", pool_size, "BLR")
+    p_round = rng.uniform(0.15, 0.35) if mcc == 4814 else rng.uniform(0.0, 0.08)  # recharge prices are round
+    days = [d_ for d_ in [config.START_DATE + timedelta(days=k) for k in range(config.WEEKS * 7)]
+            if mcc != 5943 or d_.weekday() < 5]
+    amounts = varied_amounts(n, lo, top)
+    round_pool = [a for a in range(100, hi + 1, 100)] or [100]
+    amounts = np.where(rng.random(n) < p_round, rng.choice(round_pool, size=n), amounts)
+    payments = make_txns(f"BG{idx:02d}", random_times(n, days, start_h, end_h), pool, amounts)
+    monthly = payments["amount"].sum() / (config.WEEKS * 7 / 30)
+    row = (f"BG{idx:02d}", f"Background {BG_NAMES[mcc]} {idx}", BG_NAMES[mcc], mcc, BG_MCC_GROUP[mcc],
+           lo, hi, int(monthly * 0.6), int(max(d["monthly_max"], monthly * 1.25)), start_h, end_h, False, "BLR")
+    return payments, row
+
+
 # --------------------------------------------------------------- merchants
 MERCHANTS = [
     # id, name, category, mcc, group, ticket min/max, monthly min/max, hours, festival, catchment
@@ -142,6 +175,8 @@ MERCHANTS = [
     ("M9", "Sweet Shop C", "sweets", 5441, "food", 100, 2000, 50000, 100000, 9, 21, True, "BLR"),
     ("M10a", "Bakery E", "bakery", 5462, "food", 30, 600, 30000, 70000, 7, 23, False, "BLR"),
     ("M10b", "Recharge Point", "recharge", 4814, "telecom", 10, 1000, 30000, 70000, 8, 22, False, "BLR"),
+    ("M6", "Cafe Nine", "cafe", 5812, "food", 20, 1500, 40000, 120000, 9, 23, False, "BLR"),
+    ("M11", "Bakery L", "bakery", 5462, "food", 30, 20000, 40000, 1000000, 7, 23, False, "BLR"),
 ]
 MERCHANT_COLUMNS = [
     "merchant_id", "name", "declared_category", "declared_mcc", "category_group",
@@ -165,6 +200,8 @@ GROUND_TRUTH = [
     ("M9", "evasive festival front (varied amounts, one-time payers)", True),
     ("M10a", "split operator (bakery side, linked by settlement account)", True),
     ("M10b", "split operator (recharge side, linked by settlement account)", True),
+    ("M6", "casino-style sessions, no fixtures", True),
+    ("M11", "front with an inflated declaration (huge ticket range)", True),
 ]
 
 
@@ -260,13 +297,61 @@ def main():
     for mid, g in payments.groupby("merchant_id"):
         refund_parts.append(make_refunds(g, REFUND_RATES.get(mid, NORMAL_REFUND_RATE)))
 
-    transactions = pd.concat([payments] + refund_parts, ignore_index=True).sort_values("timestamp")
+
+    # ---------------- v3 merchants (generated after the earlier ones, so earlier data is unchanged)
+    new_parts = []
+    non_fixture_days = [d for d in all_days if d.date() not in fixture_dates]
+
+    # M6: casino-style sessions on NON-fixture days (so the calendar signal cannot see it).
+    pool = make_pool("M6P", 200, "BLR")
+    new_parts.append(make_txns("M6", random_times(250, all_days, 9, 22), pool, varied_amounts(250, 50, 400)))
+    players = make_pool("M6B", 20, "BLR")
+    player_ids = list(players)
+    s_times, s_amounts, s_payers = [], [], []
+    for pid in player_ids:
+        for _ in range(3):
+            day = non_fixture_days[int(rng.integers(0, len(non_fixture_days)))]
+            t0 = day + timedelta(hours=20, minutes=int(rng.integers(0, 180)))
+            amount = int(rng.choice([100, 200, 500]))
+            for _k in range(int(rng.integers(3, 9))):
+                s_times.append(t0); s_amounts.append(amount); s_payers.append(pid)
+                t0 = t0 + timedelta(minutes=int(rng.integers(4, 18)))
+                amount = min(amount * int(rng.choice([1, 1, 2])), 2000)
+    session_df = pd.DataFrame({"merchant_id": "M6", "timestamp": s_times, "amount": s_amounts,
+                               "payer_id": s_payers, "payer_region": [players[p] for p in s_payers],
+                               "txn_type": "payment"})
+    new_parts.append(session_df)
+
+    # M11: a front with an INFLATED declaration. Big round bets, spread over all hours.
+    pool = make_pool("M11P", 250, "BLR")
+    new_parts.append(make_txns("M11", random_times(300, all_days, 7, 20), pool, varied_amounts(300, 40, 450)))
+    bettors = make_pool("M11B", 30, "BLR")
+    new_parts.append(make_txns("M11", random_times(150, all_days, 10, 23), bettors,
+                               rng.choice([1500, 2000, 3000, 5000], size=150)))
+
+    # Background merchants: honest peers for every MCC.
+    background_rows = []
+    idx = 0
+    for mcc in config.MCC_DEFAULTS:
+        for _ in range(BACKGROUND_PER_MCC):
+            idx += 1
+            payments_bg, row = make_background(idx, mcc)
+            new_parts.append(payments_bg)
+            background_rows.append(row)
+
+    payments_new = pd.concat(new_parts, ignore_index=True)
+    refund_parts_new = [make_refunds(g, REFUND_RATES.get(mid, NORMAL_REFUND_RATE))
+                        for mid, g in payments_new.groupby("merchant_id")]
+
+    transactions = pd.concat([payments, payments_new] + refund_parts + refund_parts_new,
+                             ignore_index=True).sort_values("timestamp")
     transactions.insert(0, "txn_id", [f"T{i:06d}" for i in range(1, len(transactions) + 1)])
 
-    merchants = pd.DataFrame(MERCHANTS, columns=MERCHANT_COLUMNS)
+    merchants = pd.DataFrame(MERCHANTS + background_rows, columns=MERCHANT_COLUMNS)
     merchants["settlement_account_id"] = [
         SHARED_ACCOUNTS.get(m, f"ACC-{m}") for m in merchants["merchant_id"]]
-    truth = pd.DataFrame(GROUND_TRUTH, columns=["merchant_id", "scenario", "is_front"])
+    truth = pd.DataFrame(GROUND_TRUTH + [(r[0], "background honest merchant", False) for r in background_rows],
+                         columns=["merchant_id", "scenario", "is_front"])
 
     os.makedirs(config.DATA_DIR, exist_ok=True)
     stamp = "%Y-%m-%dT%H:%M:%S"
@@ -291,10 +376,13 @@ def print_summary(transactions, windows):
     pay = pay.assign(in_window=in_window)
     print(f"{'merchant':<9}{'txns':>6}{'total Rs':>11}{'payers':>8}{'in-window %':>13}{'refund %':>10}")
     for mid, g in pay.groupby("merchant_id", sort=False):
+        if mid.startswith("BG"):
+            continue
         share = 100 * g.loc[g["in_window"], "amount"].sum() / g["amount"].sum()
         refund = 100 * refunds.loc[refunds["merchant_id"] == mid, "amount"].sum() / g["amount"].sum()
         print(f"{mid:<9}{len(g):>6}{g['amount'].sum():>11,}{g['payer_id'].nunique():>8}"
               f"{share:>12.0f}%{refund:>9.0f}%")
+    print(f"(plus {pay.loc[pay['merchant_id'].str.startswith('BG'), 'merchant_id'].nunique()} background merchants used as peers)")
     print(f"\nWrote files to ./{config.DATA_DIR}/")
 
 

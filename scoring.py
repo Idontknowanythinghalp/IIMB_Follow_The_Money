@@ -259,12 +259,118 @@ def find_links(info):
     return links
 
 
+# ------------------------------------------------- MCC clamp, session, peers
+def effective_declared(m):
+    """Trust a declared ticket max / monthly max only up to DECLARATION_CLAMP x the MCC default."""
+    m = m.copy()
+    notes = []
+    d = config.MCC_DEFAULTS.get(int(m["declared_mcc"]))
+    if config.USE_DECLARATION_CLAMP and d is not None:
+        if m["declared_ticket_max"] > config.DECLARATION_CLAMP * d["ticket"][1]:
+            m["declared_ticket_max"] = config.DECLARATION_CLAMP * d["ticket"][1]
+            notes.append("ticket range")
+        if m["declared_monthly_max"] > config.DECLARATION_CLAMP * d["monthly_max"]:
+            m["declared_monthly_max"] = config.DECLARATION_CLAMP * d["monthly_max"]
+            notes.append("monthly volume")
+    flag = (f"declared {' and '.join(notes)} above {config.DECLARATION_CLAMP:g}x the category norm; clamped"
+            if notes else "")
+    return m, flag
+
+
+def session_score(g):
+    """Velocity: group each payer's payments into sessions (SESSION_MIN_TXNS or more
+    within SESSION_WINDOW_HOURS). Returns (s_session, sub-scores). g must be sorted by time."""
+    limit = config.SESSION_WINDOW_HOURS * 3600.0
+    t = (g["timestamp"] - EPOCH).dt.total_seconds().to_numpy()
+    amount = g["amount"].to_numpy()
+    sessions, session_payers = [], set()
+    for payer, idx in g.groupby("payer_id").indices.items():
+        start = 0
+        while start < len(idx):
+            end = start
+            while end + 1 < len(idx) and t[idx[end + 1]] - t[idx[start]] <= limit:
+                end += 1
+            if end - start + 1 >= config.SESSION_MIN_TXNS:
+                sessions.append((amount[idx[start]], amount[idx[end]]))
+                session_payers.add(payer)
+                start = end + 1
+            else:
+                start += 1
+    hour = g["timestamp"].dt.hour
+    raw = {
+        "payers_with_session": len(session_payers) / g["payer_id"].nunique(),
+        "escalating_sessions": float(np.mean([last >= 2 * first for first, last in sessions])) if sessions else 0.0,
+        "late_night_share": float(((hour >= 21) | (hour < 2)).mean()),
+    }
+    subs = {k: scale(v, *config.SESSION_SCALES[k]) for k, v in raw.items()}
+    # late nights and escalation only count once there are sessions at all
+    s_session = float(np.mean(list(subs.values()))) if subs["payers_with_session"] > 0 else 0.0
+    return s_session, subs
+
+
+def peer_metrics_table(transactions, merchants):
+    """Behavioural measures per merchant, used to build peer groups (same MCC)."""
+    pay = transactions[transactions["txn_type"] == "payment"]
+    mcc = merchants.set_index("merchant_id")["declared_mcc"]
+    table = {}
+    for mid, g in pay.groupby("merchant_id"):
+        if len(g) < config.MIN_TXNS_TO_SCORE or mid not in mcc.index:
+            continue
+        by_payer = g.groupby("payer_id")["amount"].sum().sort_values(ascending=False)
+        k = max(1, int(np.ceil(config.TOP_PAYER_FRACTION * len(by_payer))))
+        table[mid] = {"mcc": int(mcc[mid]),
+                      "top_payer_share": by_payer.iloc[:k].sum() / by_payer.sum(),
+                      "round_share": float((g["amount"] % 100 == 0).mean()),
+                      "txns_per_payer": len(g) / g["payer_id"].nunique()}
+    return table
+
+
+def robust_z(value, peer_values, floor):
+    """How far above the peer median, in robust standard deviations (median / MAD)."""
+    peers = np.asarray(peer_values, dtype=float)
+    median = float(np.median(peers))
+    mad = 1.4826 * float(np.median(np.abs(peers - median)))
+    return (value - median) / max(mad, floor)
+
+
+def apply_peers(raw, mid, table):
+    """If the merchant has enough peers, score round-amount share and payer concentration
+    against them (replacing the fixed baselines) and add payer repetition. Returns peer count."""
+    me = table.get(mid)
+    peers = [v for k, v in table.items() if k != mid and me and v["mcc"] == me["mcc"]]
+    if not config.USE_PEERS or len(peers) < config.PEER_MIN_SIZE:
+        return len(peers)
+    for metric in ("top_payer_share", "round_share", "txns_per_payer"):
+        raw[f"peer_{metric}"] = robust_z(me[metric], [p[metric] for p in peers], config.PEER_FLOORS[metric])
+    raw["top_payer_share"] = raw["round_share"] = None  # the peer-relative versions replace them
+    return len(peers)
+
+
+def clusters(ids, links):
+    """Union-find: connected groups of linked merchants (so 3+ shops form one group)."""
+    parent = {m: m for m in ids}
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    for a, b, _ in links:
+        parent[find(a)] = find(b)
+    sizes = {}
+    for m in ids:
+        sizes[find(m)] = sizes.get(find(m), 0) + 1
+    return {m: (find(m), sizes[find(m)]) for m in ids}
+
+
 # ------------------------------------------------------------- main function
 def score_all(transactions, merchants, calendar):
     """One row per merchant. The dashboard reads only this table."""
     windows, festival = get_windows(calendar)
     shifts = window_shifts(windows, festival)
     rows, info = {}, {}
+    peer_table = peer_metrics_table(transactions, merchants)
 
     for _, m in merchants.iterrows():
         mid = m["merchant_id"]
@@ -284,9 +390,12 @@ def score_all(transactions, merchants, calendar):
         ratio, w_payers, b_payers = calendar_signal(g, windows, festival, shifts)
         s_calendar = scale(ratio, *config.CAL_RATIO_SCALE)
 
-        raw = payer_metrics(g, m, festival, full=True)
+        m_eff, declaration_flag = effective_declared(m)
+        raw = payer_metrics(g, m_eff, festival, full=True)
         raw["refund_share"] = float(refunds / g["amount"].sum())
+        peer_count = apply_peers(raw, mid, peer_table)
         s_payer, subs = payer_score(raw)
+        payer_basis = "whole period"
 
         # same payer-pattern measures on the fixture-window slice only (fights dilution)
         in_window = np.zeros(n, dtype=bool)
@@ -294,11 +403,13 @@ def score_all(transactions, merchants, calendar):
         for a, b in windows:
             in_window |= (t >= a) & (t <= b)
         if in_window.sum() >= config.MIN_SLICE_TXNS:
-            slice_raw = payer_metrics(g[in_window], m, None, full=False)
+            slice_raw = payer_metrics(g[in_window], m_eff, None, full=False)
             slice_raw["refund_share"] = None
-            s_payer = max(s_payer, payer_score(slice_raw)[0])
+            s_slice, subs_slice = payer_score(slice_raw)
+            if s_slice > s_payer:  # report the sub-scores that actually produced s_payer
+                s_payer, subs, payer_basis = s_slice, subs_slice, "fixture windows only"
 
-        s_session = 0.0  # session module not built yet (add-on)
+        s_session, sess_subs = session_score(g) if config.USE_SESSION_MODULE else (0.0, {})
         drift = max(s_calendar, s_payer, s_session)
         # two-key rule: a calendar spike alone is capped
         if (s_calendar >= config.TWO_KEY_THRESHOLD and s_payer < config.TWO_KEY_THRESHOLD
@@ -308,26 +419,33 @@ def score_all(transactions, merchants, calendar):
         row.update(s_calendar=round(s_calendar, 1), s_payer=round(s_payer, 1),
                    s_session=s_session, drift=round(drift, 1),
                    confidence="normal" if n >= config.MIN_TXNS_CONFIDENT else "low",
+                   payer_basis=payer_basis, peer_group=peer_count, declaration_flag=declaration_flag,
                    cal_ratio=round(float(ratio), 2) if np.isfinite(ratio) else ratio)
         row.update({f"sub_{k}": round(v, 1) for k, v in subs.items()})
+        row.update({f"sess_{k}": round(v, 1) for k, v in sess_subs.items()})
         rows[mid] = row
         info[mid] = {"group": m["category_group"], "w_payers": w_payers, "b_payers": b_payers,
                      "account": str(m.get("settlement_account_id", "") or ""),
                      "gambling_like": shows_signal(s_calendar, s_payer, s_session)}
 
     # network booster: add bonus points to both merchants of every link
-    for a, b, reason in find_links(info):
+    links = find_links(info)
+    for a, b, reason in links:
         for mine, other in ((a, b), (b, a)):
             rows[mine]["network_bonus"] = config.NETWORK_BONUS
             rows[mine]["network_partner"] = (rows[mine]["network_partner"] + "; " if rows[mine]["network_partner"] else "") + f"{other} ({reason})"
 
+    group = clusters(list(rows), links)
+    for mid_, row in rows.items():
+        row["cluster_size"] = group[mid_][1]
     for row in rows.values():
         final = min(100.0, row["drift"] + row["network_bonus"])
         rung, rung_name = ladder(final, row["confidence"])
         row.update(final_score=round(final, 1), rung=rung, rung_name=rung_name)
 
     first = ["merchant_id", "name", "txns", "s_calendar", "s_payer", "s_session", "drift",
-             "network_bonus", "final_score", "confidence", "rung", "rung_name", "network_partner"]
+             "network_bonus", "final_score", "confidence", "rung", "rung_name", "network_partner",
+             "cluster_size"]
     df = pd.DataFrame(list(rows.values()))
     return df[first + [c for c in df.columns if c not in first]]
 

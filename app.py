@@ -33,6 +33,14 @@ SUB_LABELS = {
     "volume_vs_trend": "Volume jump compared with its own history",
     "ticket_vs_trend": "Average payment jump compared with its own history",
     "refund_share": "High share of refunds",
+    "peer_top_payer_share": "Payer concentration compared with peers",
+    "peer_round_share": "Round-number payments compared with peers",
+    "peer_txns_per_payer": "Payer repetition compared with peers",
+}
+SESS_LABELS = {
+    "payers_with_session": "Payers with a burst (3+ payments within 2 hours)",
+    "escalating_sessions": "Bursts where the amount escalates",
+    "late_night_share": "Payments between 21:00 and 02:00",
 }
 
 st.set_page_config(page_title="Follow the Money", layout="wide")
@@ -60,6 +68,17 @@ def show_chart(chart):
             return
         except TypeError:
             continue
+
+
+def score_bars(values):
+    """Horizontal bars on a fixed 0-100 axis, with the score written in each label."""
+    scores = pd.DataFrame({"Measure": [f"{name} ({value:.0f})" for name, value in values.items()],
+                           "Score": list(values.values())})
+    chart = alt.Chart(scores).mark_bar().encode(
+        x=alt.X("Score:Q", scale=alt.Scale(domain=[0, 100]), title=None),
+        y=alt.Y("Measure:N", sort="-x", title=None, axis=alt.Axis(labelLimit=500)),
+    ).properties(height=36 * len(scores))
+    show_chart(chart)
 
 
 def reload_data():
@@ -206,10 +225,33 @@ def tab_detail(results, tx, cal):
     st.markdown("**Money in by hour of day** (average per day; fixture days vs other days, approximate)")
     st.line_chart(hour_profile(pay, cal))
 
+    st.markdown("**Context**")
+    flag = row.get("declaration_flag")
+    if isinstance(flag, str) and flag:
+        st.warning("Onboarding flag: " + flag + ".")
+    peers = row.get("peer_group")
+    if pd.notna(peers) and peers >= config.PEER_MIN_SIZE:
+        st.write(f"- Compared with {int(peers)} peer merchants in the same category (MCC).")
+    else:
+        st.write("- Too few peers in this category, so fixed baselines are used.")
+    if pd.notna(row.get("cluster_size")) and row["cluster_size"] > 1:
+        st.write(f"- Part of a linked group of {int(row['cluster_size'])} merchants.")
+
     subs = {SUB_LABELS[k[4:]]: row[k] for k in row.index if k.startswith("sub_") and pd.notna(row[k])}
     if subs:
-        st.markdown("**Payer-pattern sub-scores** (0 to 100; the strongest three form the payer score)")
-        st.bar_chart(pd.Series(subs).sort_values())
+        st.markdown("**Payer-pattern sub-scores** (0 = normal, 100 = extreme; the strongest three form the payer score)")
+        st.caption(f"Computed on: {row.get('payer_basis', 'whole period')}")
+        if max(subs.values()) == 0:
+            st.write("All sub-scores are 0: this merchant looks normal on every payer-pattern measure.")
+        score_bars(subs)
+
+    sess = {SESS_LABELS[k[5:]]: row[k] for k in row.index if k.startswith("sess_") and pd.notna(row[k])}
+    if sess:
+        st.markdown("**Session (velocity) sub-scores**")
+        if row["s_session"] == 0:
+            st.write("No bursts of repeat payments from the same payer: the session score is 0.")
+        else:
+            score_bars(sess)
 
 
 # ----------------------------------------------------------------- network
@@ -265,16 +307,18 @@ def main():
     with st.sidebar:
         st.button("Reload data and reset", on_click=reload_data)
         presenter = st.checkbox("Presenter view (show answer key)", value=False)
+        show_bg = st.checkbox("Include the background (peer) merchants", value=False)
         with st.expander("The ladder"):
             for minimum, rung, name in sorted(config.LADDER, key=lambda x: x[1]):
                 st.write(f"{RUNG_ICON[rung]} {name}  (score {minimum}+)")
             st.caption("A first detection goes no higher than 'Ask merchant'.")
 
+    view = results if show_bg else results[~results["merchant_id"].str.startswith("BG")]
     tab1, tab2, tab3 = st.tabs(["Overview", "Merchant detail", "Network"])
     with tab1:
-        tab_overview(results, truth, presenter)
+        tab_overview(view, truth, presenter)
     with tab2:
-        tab_detail(results, tx, cal)
+        tab_detail(view, tx, cal)
     with tab3:
         tab_network(results, tx, mer)
 
