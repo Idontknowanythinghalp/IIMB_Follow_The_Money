@@ -2,18 +2,23 @@
 
 Run:   python generate_data.py
 Makes: data/transactions.csv, data/merchants.csv, data/calendar.csv, data/ground_truth.csv
+Same config.SEED = same data. Merchants (F = front, H = honest):
 
-Merchants:  M1 normal bakery            M2 genuine Diwali sweet shop
-            M3 betting bakery           M4a/M4b split operator (shared bettor pool)
-            M5a/M5b campus shops        M7 genuine match-night pizza shop
-            M8 festival-hiding front    M9 evasive festival front
-            M10a/M10b split operator linked only by a shared settlement account
-            M6 casino-style sessions    M11 front with an inflated declaration
-            BG01.. background honest merchants (the peer groups)
-(M3b smurfing variant comes later.)
+  H M1   normal bakery                     H M2   genuine Diwali sweet shop
+  F M3   betting bakery (fixture-linked)   F M4a/M4b  split operator, shared bettor pool
+  H M5a/M5b  campus shops, shared students H M7   genuine match-night pizza shop
+  F M8   festival-hiding front (round amounts, repeat payers)
+  F M9   evasive festival front (varied amounts, one-time payers)  <- known blind spot
+  F M10a/M10b  split operator linked ONLY by a shared settlement account
+  F M6   casino-style sessions on non-fixture days
+  F M11  front with an inflated declaration (huge ticket range)
+  H M12a/M12b  honest owner, two match-night shops, ONE settlement account (false-link trap)
+  H BG01..BG60  background honest merchants, 12 per MCC (the peer groups)
+(M3b, a smurfing variant, is described in the spec but NOT built.)
 
 The scorer must NEVER read ground_truth.csv. It exists only so we can check
 our results (and count false positives) afterwards.
+Generation order matters: later groups are generated after earlier ones so earlier data stays unchanged.
 """
 import os
 from datetime import timedelta
@@ -177,6 +182,8 @@ MERCHANTS = [
     ("M10b", "Recharge Point", "recharge", 4814, "telecom", 10, 1000, 30000, 70000, 8, 22, False, "BLR"),
     ("M6", "Cafe Nine", "cafe", 5812, "food", 20, 1500, 40000, 120000, 9, 23, False, "BLR"),
     ("M11", "Bakery L", "bakery", 5462, "food", 30, 20000, 40000, 1000000, 7, 23, False, "BLR"),
+    ("M12a", "Sports Bar", "restaurant", 5812, "food", 100, 1500, 100000, 200000, 17, 23, False, "BLR"),
+    ("M12b", "Sports Merch", "stationery", 5943, "retail", 10, 500, 40000, 100000, 10, 21, False, "BLR"),
 ]
 MERCHANT_COLUMNS = [
     "merchant_id", "name", "declared_category", "declared_mcc", "category_group",
@@ -185,7 +192,7 @@ MERCHANT_COLUMNS = [
     "festival_eligible", "declared_catchment",
 ]
 # Settlement account per merchant. Only M10a and M10b share one (same owner).
-SHARED_ACCOUNTS = {"M10a": "ACC-OWNER-1", "M10b": "ACC-OWNER-1"}
+SHARED_ACCOUNTS = {"M10a": "ACC-OWNER-1", "M10b": "ACC-OWNER-1", "M12a": "ACC-OWNER-2", "M12b": "ACC-OWNER-2"}
 
 GROUND_TRUTH = [
     ("M1", "normal bakery", False),
@@ -202,6 +209,8 @@ GROUND_TRUTH = [
     ("M10b", "split operator (recharge side, linked by settlement account)", True),
     ("M6", "casino-style sessions, no fixtures", True),
     ("M11", "front with an inflated declaration (huge ticket range)", True),
+    ("M12a", "honest owner: sports bar (busy on match nights)", False),
+    ("M12b", "honest owner: sports merchandise (busy on match nights)", False),
 ]
 
 
@@ -338,6 +347,22 @@ def main():
             payments_bg, row = make_background(idx, mcc)
             new_parts.append(payments_bg)
             background_rows.append(row)
+
+    # M12a + M12b: an HONEST owner with two match-night businesses and ONE settlement account.
+    # Both are busy on fixture evenings (so both show a calendar signal), with ordinary customers.
+    pool = make_pool("M12AP", 600, "BLR")
+    bar_times = []
+    for day in all_days:
+        orders = rng.poisson(8 * (2.2 if day.date() in fixture_dates else 1.0))
+        bar_times += random_times(int(orders), [day], 17, 23)
+    new_parts.append(make_txns("M12a", bar_times, pool, varied_amounts(len(bar_times), 150, 900)))
+    pool = make_pool("M12BP", 500, "BLR")
+    merch_times = []
+    for day in all_days:
+        merch_times += random_times(int(rng.poisson(5)), [day], 10, 21)
+        if day.date() in fixture_dates:
+            merch_times += random_times(int(rng.poisson(5)), [day], 17, 21)
+    new_parts.append(make_txns("M12b", merch_times, pool, varied_amounts(len(merch_times), 100, 500)))
 
     payments_new = pd.concat(new_parts, ignore_index=True)
     refund_parts_new = [make_refunds(g, REFUND_RATES.get(mid, NORMAL_REFUND_RATE))

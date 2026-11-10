@@ -1,7 +1,17 @@
 """config.py - every tunable number lives here, so we tune without touching logic.
 
-All values are PLACEHOLDERS (see the spec doc). Change them here and nowhere else.
-Scoring thresholds will be added to this file when we build scoring.py.
+STATUS: all values are PLACEHOLDERS tuned on SEED = 42 of our own synthetic data. Check them with
+robustness.py (many seeds) and blind.py (held-out worlds) before quoting any performance number.
+
+Sections, top to bottom:
+  1. Simulation and calendar (used by generate_data.py AND scoring.py: windows must match)
+  2. Scoring v1: calendar signal, payer-pattern scales, two-key rule, confidence, response ladder
+  3. v2: fixture-window slice, network booster (payer overlap)
+  4. v3: MCC defaults + declaration clamp, session module, peer comparison
+  5. Network at scale: payer index, seed-and-expand, settlement-account rules
+
+Every scale is a (value that scores 0, value that scores 100) pair; scores are linear and clamped.
+Not here: FIRST_DETECTION_CAP (the ask-first rule for a first detection) lives in app.py.
 """
 from datetime import datetime
 
@@ -59,6 +69,8 @@ PAYER_SCALES = {
 }
 TOP_PAYER_FRACTION = 0.10
 PAYER_TOP_K = 3  # s_payer = average of the K strongest sub-scores (avoids dilution)
+# Note: when a merchant has enough peers (section 4), top_payer_share and round_share are
+# REPLACED by the peer_* versions above; the plain versions only apply to merchants without peers.
 
 # Two-key rule: if the calendar signal is the ONLY module at/above this,
 # drift is capped (a calendar spike alone cannot prove betting).
@@ -122,3 +134,14 @@ SESSION_SCALES = {
 USE_PEERS = True
 PEER_MIN_SIZE = 8          # need at least this many peers, otherwise fixed baselines are used
 PEER_FLOORS = {"top_payer_share": 0.03, "round_share": 0.03, "txns_per_payer": 0.15}
+
+# =====================================================================
+# Network check at scale (payer index + seed-and-expand)
+# =====================================================================
+NETWORK_SEED_SIGNAL = 30        # a link must include at least one merchant with a signal this strong...
+NETWORK_NEIGHBOUR_SIGNAL = 20   # ...and the other one needs only this much (looser)
+# The shared-account link is weak evidence on its own (honest owners share accounts), so
+# both merchants must show PAYER or SESSION evidence, not just a calendar spike.
+NETWORK_ACCOUNT_NEEDS_PAYER_EVIDENCE = True
+NETWORK_MAX_ACCOUNT_MERCHANTS = 10   # ignore accounts shared by more merchants (aggregators, marketplaces)
+NETWORK_MAX_PAYER_MERCHANTS = 50     # ignore payers who are bet-like at more merchants than this

@@ -11,7 +11,7 @@ What "blind" means here (and what it does not):
     Labels live in blind/sealed/ and are only read by `evaluate`.
   * Every world uses a fresh seed AND jittered generator parameters (pool sizes, in-window share,
     festival week), so thresholds tuned on SEED=42 are tested against a shifted world.
-  * `predict` records SHA-256 hashes of config.py, scoring.py and the predictions. `evaluate` checks them.
+  * `predict` records fingerprints of config.py and scoring.py (logic only: comments and docstrings are ignored) and SHA-256 hashes of the predictions. `evaluate` checks them.
     If you edit thresholds after `predict`, the report is stamped "NOT BLIND" and you must `make` fresh worlds.
   * LIMIT: the scenarios (fronts and honest look-alikes) were still designed by us. Fresh seeds are blind to
     the numbers, not to the ideas. Real blindness to scenario design needs a teammate to write scenarios:
@@ -53,6 +53,20 @@ FAMILY = {
 def sha(path):
     with open(path, "rb") as f:
         return hashlib.sha256(f.read()).hexdigest()
+
+
+def code_fingerprint(path):
+    """Hash of a source file's LOGIC: comments and docstrings are ignored, so editing documentation
+    does not break the blind seal, but changing any threshold or line of logic does."""
+    import ast
+    tree = ast.parse(open(path).read())
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.FunctionDef, ast.ClassDef)) and node.body:
+            first = node.body[0]
+            if isinstance(first, ast.Expr) and isinstance(getattr(first, "value", None), ast.Constant) \
+                    and isinstance(first.value.value, str):
+                node.body = node.body[1:] or [ast.Pass()]
+    return hashlib.sha256(ast.dump(tree).encode()).hexdigest()
 
 
 def family_of(true_id):
@@ -158,7 +172,7 @@ def cmd_predict(args):
     from scoring import load_data, score_all
     os.makedirs(PRED, exist_ok=True)
     frozen = {"predicted": datetime.now(timezone.utc).isoformat(),
-              "code_sha256": {f: sha(f) for f in CODE_FILES}, "predictions_sha256": {}}
+              "code_fingerprint": {f: code_fingerprint(f) for f in CODE_FILES}, "predictions_sha256": {}}
     keep = ["merchant_id", "final_score", "rung", "rung_name", "confidence", "s_calendar", "s_payer",
             "s_session", "network_bonus", "network_partner", "cluster_size"]
     for name in manifest["worlds"]:
@@ -187,8 +201,8 @@ def cmd_evaluate(args):
     frozen = json.load(open(f"{ROOT}/predictions_manifest.json"))
     problems = []
     for f in CODE_FILES:
-        if sha(f) != frozen["code_sha256"][f]:
-            problems.append(f"{f} changed after predict")
+        if code_fingerprint(f) != frozen["code_fingerprint"][f]:
+            problems.append(f"{f} logic or thresholds changed after predict")
     for name, h in frozen["predictions_sha256"].items():
         if sha(f"{PRED}/{name}.csv") != h:
             problems.append(f"predictions for {name} were edited")

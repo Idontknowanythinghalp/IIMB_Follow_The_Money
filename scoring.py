@@ -1,17 +1,29 @@
-"""scoring.py - turns transactions into one results row per merchant (v2).
+"""scoring.py - turns transactions into one results row per merchant (v3).
 
 Used by the dashboard:   from scoring import load_data, score_all
-Run it directly to test: python scoring.py
+Run it directly to test: python scoring.py   (prints the table and a ground-truth report)
 
-v2 has: calendar signal (matched-hours baseline that ignores festival days),
-payer pattern (10 sub-metrics, also computed on the fixture-window slice),
-festival check, two-key rule, network bonus (settlement-account link OR payer
-overlap), confidence, ladder.
-Not built yet: session module (s_session is 0).
+Pipeline inside score_all(), per merchant:
+  1. Calendar signal   money inside fixture windows / expected money in the same clock hours on clean
+                       non-fixture days (matched-hours baseline). Festival-overlap windows count only
+                       repeat-payer or round-amount payments.            -> s_calendar
+  2. Payer pattern     13 sub-metrics (10 fixed + 3 peer z-scores), averaged over the K strongest.
+                       Declared ranges are clamped to 2x the MCC norm. Also computed on the
+                       fixture-window slice only; the higher result wins.  -> s_payer
+  3. Session module    bursts of 3+ payments from one payer within 2 hours, escalation, late night. -> s_session
+  4. Festival check    a genuine festival surge switches off the two VOLUME sub-metrics only.
+  5. drift = max of the three. Two-key rule: if only the calendar is at/above 30, drift is capped at 59.
+  6. Confidence        under 20 payments: not scored; 20-49: low (rung capped at Ask).
+After all merchants are scored:
+  7. Network booster   find_links(): seed-and-expand over a payer index and settlement accounts.
+                       Linked merchants get +25. final_score = min(100, drift + bonus).
+  8. Ladder            final_score -> rung (Green / Monitor / Ask / Payout hold / Review).
+The ask-first rule (a first detection never goes past Ask) is applied in app.py, not here.
 
-IMPORTANT: score_all() must never read ground_truth.csv. Only the test report
-at the bottom of this file does, and only to compare results afterwards.
+IMPORTANT: score_all() must never read ground_truth.csv. Only print_report() at the bottom does,
+and only to compare results afterwards.
 """
+from collections import Counter, defaultdict
 from datetime import timedelta
 
 import numpy as np
@@ -222,40 +234,88 @@ def ladder(final_score, confidence):
     return rung, name
 
 
-def shows_signal(s_calendar, s_payer, s_session):
-    """For the network check one module at/above the threshold is enough:
-    the link (shared account or shared bet-like payers) supplies the second key."""
-    return max(s_calendar, s_payer, s_session) >= config.TWO_KEY_THRESHOLD
+def link_reason(x, y):
+    """Why two merchants should be linked, or None. x and y are info dicts (see score_all).
+    Single source of truth, used by both the indexed search and the brute-force reference."""
+    if x["group"] == y["group"]:
+        return None
+    strongest, weakest = max(x["max_signal"], y["max_signal"]), min(x["max_signal"], y["max_signal"])
+    if strongest < config.NETWORK_SEED_SIGNAL or weakest < config.NETWORK_NEIGHBOUR_SIGNAL:
+        return None
+    # settlement account: weak on its own, so it needs payer/session evidence on BOTH sides
+    if x["account"] and x["account"] == y["account"]:
+        need = config.TWO_KEY_THRESHOLD
+        if config.NETWORK_ACCOUNT_NEEDS_PAYER_EVIDENCE:
+            both = max(x["s_payer"], x["s_session"]) >= need and max(y["s_payer"], y["s_session"]) >= need
+        else:
+            both = True
+        if both:
+            return "shared settlement account"
+    # bet-like payers shared inside fixture windows
+    shared = x["w_payers"] & y["w_payers"]
+    smaller = min(len(x["w_payers"]), len(y["w_payers"]))
+    if smaller == 0 or len(shared) < config.NETWORK_MIN_SHARED:
+        return None
+    overlap = len(shared) / smaller
+    base_small = min(len(x["b_payers"]), len(y["b_payers"]))
+    base_overlap = len(x["b_payers"] & y["b_payers"]) / base_small if base_small else 0.0
+    if overlap >= config.NETWORK_OVERLAP_MIN and (
+            base_overlap == 0 or overlap >= config.NETWORK_LIFT * base_overlap):
+        return f"shared payers ({overlap:.0%} overlap)"
+    return None
 
 
-# ------------------------------------------------------------ network bonus
 def find_links(info):
-    """Pairs of merchants that strengthen each other. `info` maps merchant_id to a dict.
-    Conditions (all must hold): both show a signal, category groups differ, and
-    either they share a settlement account OR they share payers inside fixture
-    windows (overlap high, enough shared payers, and clearly above the baseline)."""
+    """Indexed search (scales to many merchants). Instead of comparing every pair:
+    1. seeds = merchants with a strong signal; candidates = merchants with at least a weak one;
+    2. an index maps each bet-like payer to the candidates they paid (very common payers are skipped);
+    3. for each seed, count shared payers with candidates through the index, so only pairs that
+       actually share payers are ever examined; accounts are indexed the same way;
+    4. each surviving pair goes through link_reason()."""
+    seeds = [m for m, i in info.items() if i["max_signal"] >= config.NETWORK_SEED_SIGNAL]
+    candidates = [m for m, i in info.items() if i["max_signal"] >= config.NETWORK_NEIGHBOUR_SIGNAL]
+    index = defaultdict(list)
+    for m in candidates:
+        for payer in info[m]["w_payers"]:
+            index[payer].append(m)
+    pairs = set()
+    for seed in seeds:
+        counts = Counter()
+        for payer in info[seed]["w_payers"]:
+            others = index.get(payer, ())
+            if len(others) > config.NETWORK_MAX_PAYER_MERCHANTS:
+                continue
+            for other in others:
+                if other != seed:
+                    counts[other] += 1
+        for other, shared in counts.items():
+            if shared >= config.NETWORK_MIN_SHARED:
+                pairs.add(tuple(sorted((seed, other))))
+    by_account = defaultdict(list)
+    for m in candidates:
+        if info[m]["account"]:
+            by_account[info[m]["account"]].append(m)
+    for members in by_account.values():
+        if 2 <= len(members) <= config.NETWORK_MAX_ACCOUNT_MERCHANTS:
+            for i, a in enumerate(members):
+                for b in members[i + 1:]:
+                    pairs.add(tuple(sorted((a, b))))
     links = []
-    ids = list(info)
+    for a, b in sorted(pairs):
+        reason = link_reason(info[a], info[b])
+        if reason:
+            links.append((a, b, reason))
+    return links
+
+
+def find_links_bruteforce(info):
+    """Reference implementation: every pair. Only for tests and benchmarks."""
+    ids, links = list(info), []
     for i, a in enumerate(ids):
         for b in ids[i + 1:]:
-            x, y = info[a], info[b]
-            if not (x["gambling_like"] and y["gambling_like"]):
-                continue
-            if x["group"] == y["group"]:
-                continue
-            if x["account"] and x["account"] == y["account"]:
-                links.append((a, b, "shared settlement account"))
-                continue
-            shared = x["w_payers"] & y["w_payers"]
-            smaller = min(len(x["w_payers"]), len(y["w_payers"]))
-            if smaller == 0 or len(shared) < config.NETWORK_MIN_SHARED:
-                continue
-            overlap = len(shared) / smaller
-            base_small = min(len(x["b_payers"]), len(y["b_payers"]))
-            base_overlap = len(x["b_payers"] & y["b_payers"]) / base_small if base_small else 0.0
-            if overlap >= config.NETWORK_OVERLAP_MIN and (
-                    base_overlap == 0 or overlap >= config.NETWORK_LIFT * base_overlap):
-                links.append((a, b, f"shared payers ({overlap:.0%} overlap)"))
+            reason = link_reason(info[a], info[b])
+            if reason:
+                links.append((a, b, reason))
     return links
 
 
@@ -426,7 +486,8 @@ def score_all(transactions, merchants, calendar):
         rows[mid] = row
         info[mid] = {"group": m["category_group"], "w_payers": w_payers, "b_payers": b_payers,
                      "account": str(m.get("settlement_account_id", "") or ""),
-                     "gambling_like": shows_signal(s_calendar, s_payer, s_session)}
+                     "s_payer": s_payer, "s_session": s_session,
+                     "max_signal": max(s_calendar, s_payer, s_session)}
 
     # network booster: add bonus points to both merchants of every link
     links = find_links(info)
