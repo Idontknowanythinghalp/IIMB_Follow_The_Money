@@ -1,5 +1,7 @@
 # Follow the Money: merchant drift monitor (prototype v3)
 
+https://idontknowanythinghalp-iimb-follow-the-money-app-sek8ob.streamlit.app/
+
 Detects merchants whose payments do not match what they declared (the "bakery that takes bets" problem),
 using payment patterns only, and responds in steps (ask first) so honest merchants can recover.
 All data is synthetic. All thresholds are placeholders tuned on seed 42.
