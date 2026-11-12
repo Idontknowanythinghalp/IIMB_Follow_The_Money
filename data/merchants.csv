@@ -13,6 +13,8 @@ M10a,Bakery E,bakery,5462,food,30,600,30000,70000,7,23,False,BLR,ACC-OWNER-1
 M10b,Recharge Point,recharge,4814,telecom,10,1000,30000,70000,8,22,False,BLR,ACC-OWNER-1
 M6,Cafe Nine,cafe,5812,food,20,1500,40000,120000,9,23,False,BLR,ACC-M6
 M11,Bakery L,bakery,5462,food,30,20000,40000,1000000,7,23,False,BLR,ACC-M11
+M12a,Sports Bar,restaurant,5812,food,100,1500,100000,200000,17,23,False,BLR,ACC-OWNER-2
+M12b,Sports Merch,stationery,5943,retail,10,500,40000,100000,10,21,False,BLR,ACC-OWNER-2
 BG01,Background bakery 1,bakery,5462,food,30,600,26377,80000,7,20,False,BLR,ACC-BG01
 BG02,Background bakery 2,bakery,5462,food,30,600,33976,80000,7,20,False,BLR,ACC-BG02
 BG03,Background bakery 3,bakery,5462,food,30,600,34810,80000,7,20,False,BLR,ACC-BG03

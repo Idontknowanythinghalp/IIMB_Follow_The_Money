@@ -205,11 +205,15 @@ def tab_detail(results, tx, cal):
         m[2].metric("Session", f"{row['s_session']:.0f}")
         m[3].metric("Network bonus", f"+{row['network_bonus']:.0f}")
         m[4].metric("Final score", f"{row['final_score']:.0f}")
+        m[4].metric("Final score", f"{row['final_score']:.0f}")
+        st.caption(f"Final {row['final_score']:.1f} = strongest of the three signals "
+                   f"({row['drift']:.1f}) + network bonus ({row['network_bonus']:.0f}), "
+                   f"capped at 100. Signals are not added together.")
         st.markdown("**Why**")
         for line in why_lines(row):
             st.write("- " + line)
-    with right:
-        st.markdown("**Ask-first ladder**")
+        with right:
+            st.markdown("**Ask-first ladder**")
         st.button("Merchant explains (accepted)", on_click=merchant_explains, args=(mid,))
         st.button("No response / explanation rejected", on_click=no_response, args=(mid, recommended),
                   disabled=step >= recommended)

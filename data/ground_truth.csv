@@ -13,6 +13,8 @@ M10a,"split operator (bakery side, linked by settlement account)",True
 M10b,"split operator (recharge side, linked by settlement account)",True
 M6,"casino-style sessions, no fixtures",True
 M11,front with an inflated declaration (huge ticket range),True
+M12a,honest owner: sports bar (busy on match nights),False
+M12b,honest owner: sports merchandise (busy on match nights),False
 BG01,background honest merchant,False
 BG02,background honest merchant,False
 BG03,background honest merchant,False
