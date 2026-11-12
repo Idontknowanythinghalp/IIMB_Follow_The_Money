@@ -1,5 +1,7 @@
 # Follow the Money: merchant drift monitor (prototype v3)
 
+https://idontknowanythinghalp-iimb-follow-the-money-app-sek8ob.streamlit.app/
+
 Detects merchants whose payments do not match what they declared (the "bakery that takes bets" problem),
 using payment patterns only, and responds in steps (ask first) so honest merchants can recover.
 All data is synthetic. All thresholds are placeholders tuned on seed 42.
@@ -39,7 +41,7 @@ python blind.py make --worlds 10 --first-seed 9001 && python blind.py predict &&
 
 ## Synthetic merchants
 
-Honest (should stay below Ask): M1 normal bakery, M2 genuine Diwali sweet shop, M5a/M5b campus shops sharing students, M7 match-night pizza shop, M12a/M12b honest owner with two match-night shops on one settlement account, BG01 to BG60 background peers.
+ M1 normal bakery, M2 genuine Diwali sweet shop, M5a/M5b campus shops sharing students, M7 match-night pizza shop, M12a/M12b honest owner with two match-night shops on one settlement account, BG01 to BG60 background peers.
 Fronts (should reach Ask or above): M3 fixture-linked betting bakery, M4a/M4b split operator (shared bettors), M10a/M10b split operator (shared settlement account), M8 festival-hiding front (round amounts), M9 evasive festival front (varied amounts), M6 casino sessions without fixtures, M11 inflated declaration.
 
 ## Testing and what the numbers mean
@@ -48,7 +50,7 @@ Fronts (should reach Ask or above): M3 fixture-linked betting bakery, M4a/M4b sp
 - `robustness.py`: fresh seeds, same scenario designs. Last run (49 untuned seeds plus seed 42, M12 included): 0 of 3,283 honest merchant-runs at Ask or above; fronts at Ask or above averaged 7.8 of 9 per world.
 - `blind.py`: fresh seeds plus jittered generator parameters, anonymised IDs, sealed labels. If `config.py` or `scoring.py` logic changes after `predict`, `evaluate` marks the report NOT BLIND. Comment and docstring edits do not break the seal. First run: 76 of 90 fronts and 0 of 670 honest at Ask or above. That set is burned if anyone tunes after seeing it.
 
-## Known limits (say these out loud)
+## Known limits
 
 - **M9 (evasive festival front) is never caught.** The festival-overlap rule that protects M2 also drops one-time varied-amount bettors. Fixing it needs a new signal, not a threshold change.
 - **M12b is held under Ask by the two-key cap (59), one point below the line.** It is protected by the rule, not by margin.
